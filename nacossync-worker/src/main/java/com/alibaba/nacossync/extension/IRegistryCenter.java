@@ -5,7 +5,9 @@ import com.alibaba.nacossync.pojo.model.TaskDO;
 import java.util.List;
 
 /**
- * 所有注册中心抽象
+ * @author roboslyq
+ * @version 1.0
+ * @date: 2018-15-12 09:11
  */
 public interface IRegistryCenter {
     public List<String> doConsumer(TaskDO taskDO);

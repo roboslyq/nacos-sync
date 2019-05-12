@@ -44,9 +44,9 @@ import static com.alibaba.nacossync.util.DubboConstants.*;
 import static com.alibaba.nacossync.util.StringUtils.*;
 
 /**
- * @author paderlol
+ * @author roboslyq
  * @version 1.0
- * @date: 2018-12-24 21:33
+ * @date: 2018-15-12 09:11
  */
 @Slf4j
 @NacosSyncService(sourceCluster = ClusterTypeEnum.ZK, destinationCluster = ClusterTypeEnum.NACOS)

@@ -21,10 +21,9 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 
 /**
- * Nacos 同步 Zk 数据
- * 
- * @author paderlol
- * @date 2019年01月06日, 15:08:06
+ * @author roboslyq
+ * @version 1.0
+ * @date: 2018-15-12 09:11
  */
 @Slf4j
 @RegistryCenter(name = ClusterTypeEnum.NACOS)

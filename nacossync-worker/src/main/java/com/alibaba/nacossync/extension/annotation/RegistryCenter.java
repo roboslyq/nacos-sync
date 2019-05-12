@@ -34,6 +34,11 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 @Component
+/**
+ * @author roboslyq
+ * @version 1.0
+ * @date: 2018-15-12 09:11
+ */
 public @interface RegistryCenter {
 
     @AliasFor(annotation = Component.class)
