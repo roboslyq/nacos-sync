@@ -10,32 +10,33 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package com.alibaba.nacossync.extension.newimpl;
+package com.alibaba.nacossync.extension.annotation;
 
 import com.alibaba.nacossync.constant.ClusterTypeEnum;
-import com.alibaba.nacossync.extension.IRegistryCenter;
-import com.alibaba.nacossync.extension.annotation.RegistryCenter;
-import com.alibaba.nacossync.pojo.model.TaskDO;
-import lombok.extern.slf4j.Slf4j;
+import com.alibaba.nacossync.extension.SyncManagerService;
+import com.alibaba.nacossync.extension.SyncService;
+import org.springframework.core.annotation.AliasFor;
+import org.springframework.stereotype.Component;
 
-import java.util.List;
+import java.lang.annotation.*;
 
 /**
- * Nacos 同步 Zk 数据
+ *  Mainly used to mark the SyncService implementation
+ *  of which source cluster to which destination cluster
  * 
  * @author paderlol
- * @date 2019年01月06日, 15:08:06
+ * @date 2018-12-31 15:28
+ * @see SyncService
+ * @see SyncManagerService
+ *
  */
-@Slf4j
-@RegistryCenter(name = ClusterTypeEnum.NACOS)
-public class NacosSyncServiceImpl implements IRegistryCenter {
-    @Override
-    public List<String> doConsumer(TaskDO taskDO) {
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Component
+public @interface RegistryCenter {
 
-        return null;
-    }
-    @Override
-    public boolean doRegistry(List<String> obj) {
-        return false;
-    }
+    @AliasFor(annotation = Component.class)
+    ClusterTypeEnum value()  default ClusterTypeEnum.NACOS;
+    ClusterTypeEnum name() default ClusterTypeEnum.NACOS;
 }
