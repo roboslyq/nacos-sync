@@ -42,6 +42,6 @@ import java.lang.annotation.*;
 public @interface RegistryCenter {
 
     @AliasFor(annotation = Component.class)
-    ClusterTypeEnum value()  default ClusterTypeEnum.NACOS;
+    String value()  default "";
     ClusterTypeEnum name() default ClusterTypeEnum.NACOS;
 }
