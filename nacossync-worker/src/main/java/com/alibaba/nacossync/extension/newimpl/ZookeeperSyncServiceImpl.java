@@ -18,9 +18,11 @@ import com.alibaba.nacossync.cache.SkyWalkerCacheServices;
 import com.alibaba.nacossync.constant.ClusterTypeEnum;
 import com.alibaba.nacossync.constant.MetricsStatisticsType;
 import com.alibaba.nacossync.constant.SkyWalkerConstants;
+import com.alibaba.nacossync.extension.IRegistryCenter;
 import com.alibaba.nacossync.extension.NacosProtolExchange;
 import com.alibaba.nacossync.extension.SyncService;
 import com.alibaba.nacossync.extension.annotation.NacosSyncService;
+import com.alibaba.nacossync.extension.annotation.RegistryCenter;
 import com.alibaba.nacossync.extension.holder.NacosServerHolder;
 import com.alibaba.nacossync.extension.holder.ZookeeperServerHolder;
 import com.alibaba.nacossync.monitor.MetricsManager;
@@ -33,10 +35,7 @@ import org.apache.curator.framework.recipes.cache.PathChildrenCache;
 import org.apache.curator.utils.CloseableUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
@@ -49,12 +48,10 @@ import static com.alibaba.nacossync.util.StringUtils.*;
  * @date: 2018-12-24 21:33
  */
 @Slf4j
-@NacosSyncService(sourceCluster = ClusterTypeEnum.ZK, destinationCluster = ClusterTypeEnum.NACOS)
-public class ZookeeperSyncServiceImpl implements SyncService , NacosProtolExchange<String>{
-
+@RegistryCenter(name = ClusterTypeEnum.ZK)
+public class ZookeeperSyncServiceImpl implements IRegistryCenter, NacosProtolExchange<String> {
     @Autowired
     private MetricsManager metricsManager;
-
     /**
      * Listener cache of Zookeeper  format taskId -> PathChildrenCache instance
      */
@@ -77,14 +74,13 @@ public class ZookeeperSyncServiceImpl implements SyncService , NacosProtolExchan
         this.nacosServerHolder = nacosServerHolder;
         this.skyWalkerCacheServices = skyWalkerCacheServices;
     }
-
     @Override
-    public boolean sync(TaskDO taskDO) {
+    public List<String> doConsumer(TaskDO taskDO) {
+        List<String> pathList = new ArrayList<>();
         try {
             if (pathChildrenCacheMap.containsKey(taskDO.getTaskId())) {
-                return true;
+                return pathList;
             }
-
             PathChildrenCache pathChildrenCache = getPathCache(taskDO);
             NamingService destNamingService = nacosServerHolder
                     .get(taskDO.getDestClusterId(), null);
@@ -93,11 +89,7 @@ public class ZookeeperSyncServiceImpl implements SyncService , NacosProtolExchan
                 String path = childData.getPath();
                 Map<String, String> queryParam = parseQueryString(childData.getPath());
                 if (isMatch(taskDO, queryParam) && needSync(queryParam)) {
-                    Map<String, String> ipAndPortParam = parseIpAndPortString(path);
-                    Instance instance = buildSyncInstance(queryParam, ipAndPortParam, taskDO);
-                    destNamingService.registerInstance(
-                            getServiceNameFromCache(taskDO.getTaskId(), queryParam),
-                            instance);
+                    pathList.add(path);
                 }
             }
             Objects.requireNonNull(pathChildrenCache).getListenable()
@@ -105,38 +97,7 @@ public class ZookeeperSyncServiceImpl implements SyncService , NacosProtolExchan
                         try {
 
                             String path = event.getData().getPath();
-                            Map<String, String> queryParam = parseQueryString(path);
-
-                            if (isMatch(taskDO, queryParam) && needSync(queryParam)) {
-                                Map<String, String> ipAndPortParam = parseIpAndPortString(path);
-                                Instance instance = buildSyncInstance(queryParam, ipAndPortParam,
-                                        taskDO);
-                                switch (event.getType()) {
-                                    case CHILD_ADDED:
-                                        destNamingService.registerInstance(
-                                                getServiceNameFromCache(taskDO.getTaskId(),
-                                                        queryParam), instance);
-                                        break;
-                                    case CHILD_UPDATED:
-
-                                        destNamingService.registerInstance(
-                                                getServiceNameFromCache(taskDO.getTaskId(),
-                                                        queryParam), instance);
-                                        break;
-                                    case CHILD_REMOVED:
-
-                                        destNamingService.deregisterInstance(
-                                                getServiceNameFromCache(taskDO.getTaskId(),
-                                                        queryParam),
-                                                ipAndPortParam.get(INSTANCE_IP_KEY),
-                                                Integer.parseInt(
-                                                        ipAndPortParam.get(INSTANCE_PORT_KEY)));
-
-                                        break;
-                                    default:
-                                        break;
-                                }
-                            }
+                            pathList.add(path);
                         } catch (Exception e) {
                             log.error("event process from zookeeper to nacos was failed, taskId:{}",
                                     taskDO.getTaskId(), e);
@@ -148,42 +109,20 @@ public class ZookeeperSyncServiceImpl implements SyncService , NacosProtolExchan
             log.error("sync task from zookeeper to nacos was failed, taskId:{}", taskDO.getTaskId(),
                     e);
             metricsManager.recordError(MetricsStatisticsType.SYNC_ERROR);
-            return false;
+            return null;
         }
-        return true;
+        return pathList;
     }
-
+    /**
+     * Determines that the current instance data is from another source cluster
+     */
+    boolean needSync(Map<String, String> sourceMetaData) {
+        return StringUtils.isBlank(sourceMetaData.get(SkyWalkerConstants.SOURCE_CLUSTERID_KEY));
+    }
     @Override
-    public boolean delete(TaskDO taskDO) {
-        try {
-
-            CloseableUtils.closeQuietly(pathChildrenCacheMap.get(taskDO.getTaskId()));
-            NamingService destNamingService = nacosServerHolder
-                    .get(taskDO.getDestClusterId(), null);
-            if(nacosServiceNameMap.containsKey(taskDO.getTaskId())){
-                List<Instance> allInstances =
-                        destNamingService
-                                .getAllInstances(nacosServiceNameMap.get(taskDO.getTaskId()));
-                for (Instance instance : allInstances) {
-                    if (needDelete(instance.getMetadata(), taskDO)) {
-                        destNamingService
-                                .deregisterInstance(instance.getServiceName(), instance.getIp(),
-                                        instance.getPort());
-                    }
-                    nacosServiceNameMap.remove(taskDO.getTaskId());
-
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("delete task from zookeeper to nacos was failed, taskId:{}",
-                    taskDO.getTaskId(), e);
-            metricsManager.recordError(MetricsStatisticsType.DELETE_ERROR);
-            return false;
-        }
-        return true;
+    public boolean doRegistry(List<String> obj) {
+        return false;
     }
-
     /**
      * fetch the Path cache when the task sync
      */
